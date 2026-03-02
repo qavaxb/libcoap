@@ -48,6 +48,7 @@
 #ifndef _OSCORE_CONTEXT_H
 #define _OSCORE_CONTEXT_H
 
+#include "coap3/coap_forward_decls.h"
 #include "coap3/coap_uthash_internal.h"
 
 #ifdef __cplusplus
@@ -85,6 +86,7 @@ typedef struct oscore_association_t oscore_association_t;
 
 struct oscore_ctx_t {
   struct oscore_ctx_t *next;
+  coap_context_t *c_context;
   coap_bin_const_t *master_secret;
   coap_bin_const_t *master_salt;
   coap_bin_const_t *common_iv;  /**< Derived from Master Secret,

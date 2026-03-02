@@ -103,6 +103,8 @@ oscore_bytes_equal(uint8_t *a_ptr,
 
 static void
 oscore_enter_context(coap_context_t *c_context, oscore_ctx_t *osc_ctx) {
+  if (osc_ctx)
+    osc_ctx->c_context = c_context;
   if (c_context->p_osc_ctx) {
     oscore_ctx_t *prev = c_context->p_osc_ctx;
     oscore_ctx_t *next = c_context->p_osc_ctx->next;
@@ -112,8 +114,15 @@ oscore_enter_context(coap_context_t *c_context, oscore_ctx_t *osc_ctx) {
       next = next->next;
     }
     prev->next = osc_ctx;
-  } else
+  } else {
     c_context->p_osc_ctx = osc_ctx;
+  }
+  if (c_context->oscore_context_callbacks.store) {
+    c_context->oscore_context_callbacks.store(c_context,
+                                              osc_ctx,
+                                              NULL,
+                                              c_context->oscore_context_callbacks.user_data);
+  }
 }
 
 static void
@@ -154,6 +163,13 @@ oscore_free_contexts(coap_context_t *c_context) {
 
     c_context->p_osc_ctx = osc_ctx->next;
 
+    if (c_context->oscore_context_callbacks.remove) {
+      c_context->oscore_context_callbacks.remove(c_context,
+                                                 osc_ctx,
+                                                 NULL,
+                                                 c_context->oscore_context_callbacks.user_data);
+    }
+
     oscore_free_context(osc_ctx);
   }
 }
@@ -168,6 +184,12 @@ oscore_remove_context(coap_context_t *c_context, oscore_ctx_t *osc_ctx) {
         prev->next = next->next;
       else
         c_context->p_osc_ctx = next->next;
+      if (c_context->oscore_context_callbacks.remove) {
+        c_context->oscore_context_callbacks.remove(c_context,
+                                                   next,
+                                                   NULL,
+                                                   c_context->oscore_context_callbacks.user_data);
+      }
       oscore_free_context(next);
       return 1;
     }
@@ -196,9 +218,17 @@ oscore_find_context(const coap_context_t *c_context,
   }
 
   /* no context was found in libcoap RAM - call user function to also check external storage (e.g. FLASH) */
-  if (c_context->external_oscore_find_context_handler)
-  {
-    return c_context->external_oscore_find_context_handler(c_context, rcpkey_id, ctxkey_id, oscore_r2, recipient_ctx);
+  if (c_context->oscore_context_callbacks.find) {
+    oscore_ctx_t *ext_ctx =
+        c_context->oscore_context_callbacks.find(c_context,
+                                                 rcpkey_id,
+                                                 ctxkey_id,
+                                                 oscore_r2,
+                                                 recipient_ctx,
+                                                 c_context->oscore_context_callbacks.user_data);
+    if (ext_ctx && ext_ctx->c_context == NULL)
+      ext_ctx->c_context = (coap_context_t *)c_context;
+    return ext_ctx;
   }
   return NULL;
 }
@@ -467,6 +497,8 @@ oscore_duplicate_ctx(coap_context_t *c_context,
   if (osc_ctx == NULL)
     goto error;
   memset(osc_ctx, 0, sizeof(oscore_ctx_t));
+  osc_ctx->c_context = c_context;
+  osc_ctx->c_context = c_context;
 
   sender_ctx = coap_malloc_type(COAP_OSCORE_SEN, sizeof(oscore_sender_ctx_t));
   if (sender_ctx == NULL)
@@ -524,8 +556,15 @@ oscore_duplicate_ctx(coap_context_t *c_context,
   copy_rid = coap_new_bin_const(recipient_id->s, recipient_id->length);
   if (copy_rid == NULL)
     goto error;
-  if (oscore_add_recipient(osc_ctx, copy_rid, 0) == NULL)
+  oscore_recipient_ctx_t *new_rcp = oscore_add_recipient(osc_ctx, copy_rid, 0);
+  if (new_rcp == NULL)
     goto error;
+  if (c_context && c_context->oscore_context_callbacks.store) {
+    c_context->oscore_context_callbacks.store(c_context,
+                                              osc_ctx,
+                                              new_rcp,
+                                              c_context->oscore_context_callbacks.user_data);
+  }
 
   oscore_log_context(osc_ctx, "New Common context");
   oscore_enter_context(c_context, osc_ctx);
@@ -606,10 +645,19 @@ oscore_derive_ctx(coap_context_t *c_context, coap_oscore_conf_t *oscore_conf) {
   sender_ctx->seq = oscore_conf->start_seq_num;
 
   for (i = 0; i < oscore_conf->recipient_id_count; i++) {
-    if (oscore_add_recipient(osc_ctx, oscore_conf->recipient_id[i],
-                             oscore_conf->break_recipient_key) == NULL) {
+    oscore_recipient_ctx_t *new_rcp =
+        oscore_add_recipient(osc_ctx,
+                             oscore_conf->recipient_id[i],
+                             oscore_conf->break_recipient_key);
+    if (new_rcp == NULL) {
       coap_log_warn("OSCORE: Failed to add Client ID\n");
       goto error;
+    }
+    if (c_context->oscore_context_callbacks.store) {
+      c_context->oscore_context_callbacks.store(c_context,
+                                                osc_ctx,
+                                                new_rcp,
+                                                c_context->oscore_context_callbacks.user_data);
     }
   }
   oscore_log_context(osc_ctx, "Common context");
@@ -689,6 +737,14 @@ oscore_delete_recipient(oscore_ctx_t *osc_ctx, coap_bin_const_t *rid) {
         prev->next_recipient = next->next_recipient;
       else
         osc_ctx->recipient_chain = next->next_recipient;
+      if (osc_ctx->c_context &&
+          osc_ctx->c_context->oscore_context_callbacks.remove) {
+        osc_ctx->c_context->oscore_context_callbacks.remove(
+            osc_ctx->c_context,
+            osc_ctx,
+            next,
+            osc_ctx->c_context->oscore_context_callbacks.user_data);
+      }
       oscore_free_recipient(next);
       return 1;
     }

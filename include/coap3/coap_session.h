@@ -28,8 +28,6 @@ extern "C" {
  * @{
  */
 
-#include <stdbool.h>
-
 /**
 * Abstraction of a fixed point number that can be used where necessary instead
 * of a float.  1,000 fractional bits equals one integer

@@ -128,6 +128,8 @@ install-man: install-man3 install-man5 install-man7
 	@echo ".so man3/coap_context.3" > coap_context_get_csm_timeout_ms.3
 	@echo ".so man3/coap_context.3" > coap_context_set_max_token_size.3
 	@echo ".so man3/coap_context.3" > coap_context_set_app_data2.3
+	@echo ".so man3/coap_oscore.3" > coap_register_oscore_context_callbacks.3
+	@echo ".so man3/coap_oscore.3" > coap_register_oscore_context_handler.3
 	@echo ".so man3/coap_context.3" > coap_context_get_app_data.3
 	@echo ".so man3/coap_context.3" > coap_context_set_cid_tuple_change.3
 	@echo ".so man3/coap_context.3" > coap_context_set_shutdown_no_observe.3

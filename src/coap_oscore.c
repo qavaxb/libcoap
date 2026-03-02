@@ -511,8 +511,6 @@ coap_oscore_new_pdu_encrypted_lkd(coap_session_t *session,
         /* Only update at ssn_freq rate */
         osc_ctx->sender_context->next_seq += osc_ctx->ssn_freq;
         osc_ctx->save_seq_num_func(osc_ctx->sender_context->next_seq,
-                                   rcp_ctx->recipient_id,
-                                   osc_ctx->id_context,
                                    osc_ctx->save_seq_num_func_param);
       }
     }
@@ -928,8 +926,8 @@ coap_oscore_decrypt_pdu(coap_session_t *session,
 
   /* OSCORE should be processed only if any OSCORE context is available,
   or the user provided an external handler for finding the context. */
-  if ((session->context->p_osc_ctx == NULL) &&
-      (session->context->external_oscore_find_context_handler == NULL)) {
+    if ((session->context->p_osc_ctx == NULL) &&
+      (session->context->oscore_context_callbacks.find == NULL)) {
     coap_log_warn("OSCORE: Not enabled\n");
     if (!coap_request)
       coap_handle_event_lkd(session->context,
@@ -2258,8 +2256,16 @@ coap_new_oscore_recipient_lkd(coap_context_t *context,
   coap_lock_check_locked();
   if (context->p_osc_ctx == NULL)
     return 0;
-  if (oscore_add_recipient(context->p_osc_ctx, recipient_id, 0) == NULL)
+  oscore_recipient_ctx_t *new_rcp =
+      oscore_add_recipient(context->p_osc_ctx, recipient_id, 0);
+  if (new_rcp == NULL)
     return 0;
+  if (context->oscore_context_callbacks.store) {
+    context->oscore_context_callbacks.store(context,
+                                            context->p_osc_ctx,
+                                            new_rcp,
+                                            context->oscore_context_callbacks.user_data);
+  }
   return 1;
 }
 
@@ -2285,11 +2291,35 @@ coap_delete_oscore_recipient_lkd(coap_context_t *context,
   return oscore_delete_recipient(context->p_osc_ctx, recipient_id);
 }
 
-void
-coap_register_oscore_context_handler(coap_context_t *context, external_oscore_find_context_handler_t handler)
+COAP_API void
+coap_register_oscore_context_callbacks(coap_context_t *context,
+                                       const coap_oscore_context_callbacks_t *callbacks)
 {
   assert(context);
-  context->external_oscore_find_context_handler = handler;
+  if (callbacks) {
+    context->oscore_context_callbacks = *callbacks;
+  } else {
+    memset(&context->oscore_context_callbacks, 0,
+           sizeof(context->oscore_context_callbacks));
+  }
+}
+
+COAP_API void
+coap_register_oscore_context_handler(coap_context_t *context,
+                                     coap_oscore_find_context_handler_t handler)
+{
+  if (!context)
+    return;
+  if (handler == NULL) {
+    coap_register_oscore_context_callbacks(context, NULL);
+    return;
+  }
+
+  coap_oscore_context_callbacks_t callbacks;
+
+  memset(&callbacks, 0, sizeof(callbacks));
+  callbacks.find = handler;
+  coap_register_oscore_context_callbacks(context, &callbacks);
 }
 
 /** @} */
@@ -2452,8 +2482,17 @@ coap_delete_oscore_recipient(coap_context_t *context,
   return 0;
 }
 
-void
-coap_register_oscore_context_handler(coap_context_t *context, external_oscore_find_context_handler_t handler)
+COAP_API void
+coap_register_oscore_context_callbacks(coap_context_t *context,
+                                       const coap_oscore_context_callbacks_t *callbacks)
+{
+  (void)context;
+  (void)callbacks;
+}
+
+COAP_API void
+coap_register_oscore_context_handler(coap_context_t *context,
+                                     coap_oscore_find_context_handler_t handler)
 {
   (void)context;
   (void)handler;

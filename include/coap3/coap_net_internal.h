@@ -102,8 +102,8 @@ struct coap_context_t {
 #endif /* RIOT_VERSION */
 #if COAP_OSCORE_SUPPORT
   struct oscore_ctx_t *p_osc_ctx; /**< primary oscore context  */
-  external_oscore_find_context_handler_t external_oscore_find_context_handler;
-    /**< Called  when oscore_find_context didn't find any context*/
+  coap_oscore_context_callbacks_t oscore_context_callbacks;
+    /**< Optional external handlers for OSCORE context lifecycle */
 #endif /* COAP_OSCORE_SUPPORT */
 
 #if COAP_CLIENT_SUPPORT
