@@ -57,6 +57,12 @@ coap_app_data_free_callback_t _callback_, coap_str_const_t *_ws_host_);*
 *int coap_context_oscore_server(coap_context_t *_context_,
 coap_oscore_conf_t *_oscore_conf_);*
 
+*void coap_register_oscore_context_callbacks(coap_context_t *context,
+const coap_oscore_context_callbacks_t *callbacks);*
+
+*void coap_register_oscore_context_handler(coap_context_t *context,
+external_oscore_find_context_handler_t handler);*
+
 For specific (D)TLS library support, link with
 *-lcoap-@LIBCOAP_API_VERSION@-notls*, *-lcoap-@LIBCOAP_API_VERSION@-gnutls*,
 *-lcoap-@LIBCOAP_API_VERSION@-openssl*, *-lcoap-@LIBCOAP_API_VERSION@-mbedtls*,
@@ -92,6 +98,26 @@ The coap_oscore_save_seq_num_t method handler function prototype is defined as:
  * @return @c 1 if success, else @c 0 if a failure of some sort.
  */
 typedef int (*coap_oscore_save_seq_num_t)(uint64_t sender_seq_num, void *param);
+----
+
+*Callback Type: coap_oscore_context_callbacks_t*
+
+The *coap_oscore_context_callbacks_t* structure groups the optional
+callbacks that can be used to integrate external OSCORE context storage.
+When libcoap cannot find an OSCORE context in RAM, the *find* handler is
+invoked so the application can populate one from non-volatile memory. The
+*store* handler fires whenever a context (or one of its recipients) is added
+or updated in RAM, while *remove* fires when the data is deleted. All three
+callbacks receive the user-supplied *user_data* pointer.
+
+[source, c]
+----
+typedef struct coap_oscore_context_callbacks_t {
+  coap_oscore_find_context_handler_t find;
+  coap_oscore_store_context_handler_t store;
+  coap_oscore_remove_context_handler_t remove;
+  void *user_data;
+} coap_oscore_context_callbacks_t;
 ----
 
 FUNCTIONS
@@ -225,6 +251,25 @@ See *coap_ws_set_host_request*(3) for further information.
 The *coap_context_oscore_server*() function is used to enable the server to
 support OSCORE incoming sessions. It updates _context_ with the OSCORE
 configure _oscore_conf_ (which is freed off by this call).
+
+*Function: coap_register_oscore_context_handler()*
+
+*Function: coap_register_oscore_context_callbacks()*
+
+The *coap_register_oscore_context_callbacks*() function registers the set of
+optional callbacks described above. Passing NULL clears all callbacks. When
+registered, libcoap invokes the handlers whenever an OSCORE context is
+requested (find), newly stored or updated (store), or deleted (remove),
+allowing applications to keep non-volatile storage synchronized with the
+in-memory representation.
+
+*Function: coap_register_oscore_context_handler()*
+
+The *coap_register_oscore_context_handler*() function is a convenience helper
+that only installs the *find* callback. It behaves the same as calling
+*coap_register_oscore_context_callbacks*() with a structure where only the
+*find* member (and optionally *user_data*) is set. This helper is retained
+for backwards compatibility with earlier releases.
 
 RETURN VALUES
 -------------

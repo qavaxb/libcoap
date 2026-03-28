@@ -25,6 +25,8 @@
 extern "C" {
 #endif
 
+#include "coap3/coap_forward_decls.h"
+
 /**
  * @ingroup application_api
  * @defgroup oscore OSCORE Support
@@ -260,7 +262,8 @@ COAP_API int coap_context_oscore_server(coap_context_t *context,
  *
  * @return @c 1 if success, else @c 0 if a failure of some sort.
  */
-typedef int (*coap_oscore_save_seq_num_t)(uint64_t sender_seq_num, void *param);
+typedef int (*coap_oscore_save_seq_num_t)(uint64_t sender_seq_num,
+                                          void *param);
 
 /**
  * Parse an OSCORE configuration (held in memory) and populate a OSCORE
@@ -272,7 +275,7 @@ typedef int (*coap_oscore_save_seq_num_t)(uint64_t sender_seq_num, void *param);
  * @param save_seq_num_func_param Parameter to pass into
  *                          save_seq_num_func() function.
  * @param start_seq_num The Sender Sequence Number to start with following a
- *                      reboot retrieved out of non-volatile menory or 0.
+ *                      reboot retrieved out of non-volatile memory or 0.
  *
  * @return The new OSCORE configuration. NULL if failed.  It needs to be freed
  *         off with coap_delete_oscore_conf() when no longer required,
@@ -318,6 +321,105 @@ COAP_API int coap_new_oscore_recipient(coap_context_t *context,
  */
 COAP_API int coap_delete_oscore_recipient(coap_context_t *context,
                                           coap_bin_const_t *recipient_id);
+
+/**
+ * Optional user callback to be used when oscore_find_context() cannot find any
+ * context in RAM. The callback can be used to check external storage (e.g.
+ * FLASH).
+ *
+ * @param c_context The CoAP Context to search.
+ * @param rcpkey_id The Recipient kid.
+ * @param ctxkey_id The ID Context to match (or NULL if no check).
+ * @param oscore_r2 Partial id_context to match against or NULL.
+ * @param recipient_ctx The recipient context to update.
+ * @param user_data The opaque pointer provided at registration time.
+ *
+ * return The OSCORE context and @p recipient_ctx updated, or NULL if error.
+ */
+typedef coap_oscore_handle_t *(*coap_oscore_find_context_handler_t)(
+                                                                        const coap_context_t *c_context,
+                                                                        const coap_bin_const_t rcpkey_id,
+                                                                        const coap_bin_const_t *ctxkey_id,
+                                                                        uint8_t *oscore_r2,
+                                                                        coap_oscore_recipient_ctx_handle_t **recipient_ctx,
+                                                                        void *user_data);
+
+/**
+ * Optional user callback that is invoked whenever an OSCORE context (or one of
+ * its recipients) is stored or updated inside libcoap RAM. The callback can be
+ * used to persist the information externally.
+ *
+ * @param c_context The owning CoAP context.
+ * @param osc_ctx   The OSCORE context being persisted.
+ * @param recipient_ctx Optional recipient context involved in the update, or
+ *                      NULL when the entire context changed (e.g. new context
+ *                      added).
+ * @param user_data The opaque pointer provided at registration time.
+ *
+ * @return @c 1 on success, else @c 0 on failure.
+ */
+typedef int (*coap_oscore_store_context_handler_t)(
+                                                                        const coap_context_t *c_context,
+                                                                        coap_oscore_handle_t *osc_ctx,
+                                                                        coap_oscore_recipient_ctx_handle_t *recipient_ctx,
+                                                                        void *user_data);
+
+/**
+ * Optional user callback that is invoked whenever an OSCORE context (or one of
+ * its recipients) is removed from libcoap RAM. The callback can be used to
+ * delete the corresponding entry from external storage.
+ *
+ * @param c_context The owning CoAP context.
+ * @param osc_ctx   The OSCORE context being removed.
+ * @param recipient_ctx Optional recipient context involved in the removal, or
+ *                      NULL when the entire context is being removed.
+ * @param user_data The opaque pointer provided at registration time.
+ *
+ * @return @c 1 on success, else @c 0 on failure.
+ */
+typedef int (*coap_oscore_remove_context_handler_t)(
+                                                                        const coap_context_t *c_context,
+                                                                        coap_oscore_handle_t *osc_ctx,
+                                                                        coap_oscore_recipient_ctx_handle_t *recipient_ctx,
+                                                                        void *user_data);
+
+/**
+ * Container for optional OSCORE external storage callbacks.
+ */
+typedef struct coap_oscore_context_callbacks_t {
+    coap_oscore_find_context_handler_t find;   /**< Lookup callback */
+    coap_oscore_store_context_handler_t store; /**< Persist/add/update callback */
+    coap_oscore_remove_context_handler_t remove; /**< Delete callback */
+    void *user_data;                           /**< Caller provided data */
+} coap_oscore_context_callbacks_t;
+
+/**
+ * Register optional user callbacks to integrate external OSCORE context
+ * storage.
+ *
+ * @param context   The current coap context to use.
+ * @param callbacks Structure holding optional callbacks (NULL to clear).
+ */
+COAP_API void coap_register_oscore_context_callbacks(
+                                                                        coap_context_t *context,
+                                                                        const coap_oscore_context_callbacks_t *callbacks);
+
+/**
+ * Legacy helper that only registers a find callback. This API is retained for
+ * backwards compatibility.
+ *
+ * @param context   The current coap context to use.
+ * @param handler   User callback.
+ */
+COAP_API void coap_register_oscore_context_handler(
+                                                                        coap_context_t *context,
+                                                                        coap_oscore_find_context_handler_t handler);
+
+/**
+ * Backwards compatible alias for the previous handler name.
+ */
+typedef coap_oscore_find_context_handler_t
+        external_oscore_find_context_handler_t;
 
 /** @} */
 

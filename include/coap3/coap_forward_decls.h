@@ -23,7 +23,7 @@ extern "C" {
 #endif
 
 /*
- * Define the forward declations for the structures (even non-opaque)
+ * Define the forward declarations for the structures (even non-opaque)
  * so that applications (using coap.h) as well as libcoap builds
  * can reference them (and makes .h file dependencies a lot simpler).
  */
@@ -85,6 +85,16 @@ typedef struct coap_queue_t coap_queue_t;
  * OSCORE information.
  */
 typedef struct coap_oscore_conf_t coap_oscore_conf_t;
+
+/*
+ * OSCORE context information.
+ */
+typedef struct oscore_ctx_t coap_oscore_handle_t;
+
+/*
+ * OSCORE recipient context information.
+ */
+typedef struct oscore_recipient_ctx_t coap_oscore_recipient_ctx_handle_t;
 
 /* ************* coap_pdu_internal.h ***************** */
 
